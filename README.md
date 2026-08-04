@@ -1,1 +1,2824 @@
-This focuses on a single experience: writing what you wish you could say.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Unsent — phone UI concept</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #05060a;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+
+  .scene {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 700px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse 900px 500px at 78% 88%, rgba(217,142,63,0.16), transparent 65%),
+      linear-gradient(160deg, #0a0d16 0%, #05060a 55%, #030308 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s ease-out;
+  }
+  .scene.scene-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Boot intro: blank black screen, nothing else on it, with the
+     message typing itself out in the center before everything fades
+     into the phone. */
+  .boot-intro {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.9s ease-out;
+  }
+  .boot-intro.boot-intro-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .boot-intro-text {
+    color: #ffffff;
+    font-size: 26px;
+    letter-spacing: 1px;
+    text-align: center;
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.5s ease-out;
+  }
+  .boot-intro-text.boot-intro-text-hidden {
+    opacity: 0;
+  }
+  .boot-intro-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 24px;
+    margin-left: 4px;
+    background: #ffffff;
+    animation: bootBlink 0.9s step-end infinite;
+  }
+  @keyframes bootBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* window + rain, ambient only */
+  .window {
+    position: absolute;
+    top: 8%;
+    left: 6%;
+    width: 220px;
+    height: 300px;
+    border: 10px solid #12141c;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #0d1a2b 0%, #0a1220 100%);
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.6);
+    overflow: hidden;
+    opacity: 0.85;
+    transition: opacity 0.4s ease-out;
+  }
+  .window.room-bg-decor-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .window::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 50%;
+    width: 6px; height: 100%;
+    background: #12141c;
+    transform: translateX(-50%);
+  }
+  .window::after {
+    content: "";
+    position: absolute;
+    left: 0; top: 50%;
+    width: 100%; height: 6px;
+    background: #12141c;
+    transform: translateY(-50%);
+  }
+  .rain {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      70deg,
+      rgba(150,180,220,0.14) 0px,
+      rgba(150,180,220,0.14) 1px,
+      transparent 1px,
+      transparent 14px
+    );
+    animation: rainfall 0.35s linear infinite;
+  }
+  @keyframes rainfall {
+    from { background-position: 0 0; }
+    to { background-position: -14px 26px; }
+  }
+
+  /* lamp glow, ambient only */
+  .lamp-glow {
+    position: absolute;
+    right: 4%;
+    bottom: 2%;
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(circle, rgba(242,166,90,0.30) 0%, rgba(242,166,90,0.10) 35%, transparent 70%);
+    filter: blur(2px);
+    animation: breathe 6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.75; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.04); }
+  }
+
+  /* phone frame */
+  .phone {
+    position: relative;
+    width: 375px;
+    height: 780px;
+    background: #111114;
+    border-radius: 54px;
+    padding: 14px;
+    box-shadow:
+      0 0 0 2px rgba(255,255,255,0.04),
+      0 40px 90px rgba(0,0,0,0.65),
+      0 0 120px rgba(242,166,90,0.06);
+  }
+
+  .screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #0c0d10;
+    border-radius: 40px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Change-background control, sits outside the phone so it can restyle
+     the whole room behind it. Fades in once the intro is done. */
+  .room-bg-toggle {
+    position: fixed;
+    top: 22px;
+    right: 22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(28,29,34,0.85);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 150;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-out, transform 0.15s ease;
+  }
+  .room-bg-toggle.room-bg-toggle-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .room-bg-toggle:hover { transform: scale(1.06); }
+  .room-bg-toggle:active { transform: scale(0.94); }
+
+  .room-bg-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+  }
+  .room-bg-overlay.active { display: flex; }
+  .room-bg-panel {
+    width: 300px;
+    max-width: 100%;
+    background: #1c1d22;
+    border: 1px solid #2c2d34;
+    border-radius: 18px;
+    padding: 20px 18px 18px;
+  }
+  .room-bg-panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f2efe9;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .room-bg-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .room-bg-swatch {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    cursor: pointer;
+    background-size: cover;
+    background-position: center;
+    border: 2px solid transparent;
+  }
+  .room-bg-swatch.selected {
+    border-color: #f2a65a;
+  }
+  .room-bg-swatch-check {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #f2a65a;
+    color: #1a1200;
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .room-bg-swatch.add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #26272d;
+    color: #9a9ba3;
+    font-size: 20px;
+    border: 1px dashed #3a3b42;
+  }
+  .room-bg-close-btn {
+    width: 100%;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    background: #2c2d34;
+    color: #d9dbe0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .side-button {
+    position: absolute;
+    right: -3px;
+    top: 190px;
+    width: 5px;
+    height: 96px;
+    border-radius: 3px 0 0 3px;
+    background: linear-gradient(180deg, #3d3e44, #1a1b1f);
+    box-shadow: -1px 0 2px rgba(0,0,0,0.45);
+    cursor: pointer;
+    z-index: 30;
+  }
+  .side-button:hover {
+    background: linear-gradient(180deg, #4d4e56, #232428);
+  }
+  .side-button:active {
+    transform: translateX(1px);
+  }
+
+  .dynamic-island {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 28px;
+    background: #000;
+    border-radius: 16px;
+    z-index: 20;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 26px 4px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #f2efe9;
+    letter-spacing: 0.2px;
+  }
+  .status-icons { display: flex; align-items: center; gap: 5px; }
+  .status-icons svg { display: block; }
+
+  .nav-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 16px 12px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  }
+  .nav-top {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .back {
+    color: #f2a65a;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, #3a3d46, #212329);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #d9dbe0;
+    flex-shrink: 0;
+  }
+  .nav-top .avatar {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    transform: translateX(-50%);
+  }
+  .contact-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f2efe9;
+    margin-top: 30px;
+  }
+  .contact-sub {
+    font-size: 11px;
+    color: #6b6d76;
+    margin-top: 2px;
+  }
+
+  .messages-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 18px 18px 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .messages::-webkit-scrollbar { display: none; }
+
+  .custom-scrollbar {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    right: 4px;
+    width: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.05);
+    z-index: 5;
+  }
+  .custom-scrollbar-thumb {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    min-height: 26px;
+    border-radius: 2px;
+    background: rgba(242,166,90,0.55);
+    cursor: grab;
+    touch-action: none;
+  }
+  .custom-scrollbar-thumb:hover {
+    background: rgba(242,166,90,0.75);
+  }
+  .custom-scrollbar-thumb.dragging {
+    background: rgba(242,166,90,0.9);
+    cursor: grabbing;
+  }
+
+  .date-divider {
+    text-align: center;
+    font-size: 11px;
+    color: #6b6d76;
+    margin: 6px 0 10px;
+  }
+
+  .bubble-row {
+    display: flex;
+    opacity: 0;
+    animation: rise 0.5s ease forwards;
+  }
+  .bubble-row.you { justify-content: flex-end; }
+  .bubble-row.them { justify-content: flex-start; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .bubble {
+    max-width: 74%;
+    padding: 9px 14px;
+    font-size: 15.5px;
+    line-height: 1.35;
+    border-radius: 20px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .bubble.you {
+    background: linear-gradient(160deg, #f2a65a, #d9812f);
+    color: #241505;
+    border-bottom-right-radius: 5px;
+  }
+  .bubble.them {
+    background: #24262d;
+    color: #eceef2;
+    border-bottom-left-radius: 5px;
+  }
+
+  .timestamp-label {
+    text-align: center;
+    font-size: 10px;
+    color: #55565f;
+    margin: 4px 0 2px;
+  }
+
+  .typing-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 2px;
+    opacity: 0;
+    animation: rise 0.5s ease forwards;
+    animation-delay: 1.9s;
+  }
+  .typing-bubble {
+    background: #24262d;
+    border-radius: 20px;
+    border-bottom-left-radius: 5px;
+    padding: 11px 16px;
+    display: flex;
+    gap: 4px;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #8a8c96;
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .dot:nth-child(2) { animation-delay: 0.15s; }
+  .dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  .input-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 14px 22px;
+    border-top: 0.5px solid rgba(255,255,255,0.08);
+  }
+  .input-field {
+    flex: 1;
+    min-height: 36px;
+    max-height: 108px;
+    border-radius: 18px;
+    border: 1px solid #34353d;
+    background: #17181c;
+    padding: 8px 14px;
+    font-size: 14.5px;
+    line-height: 1.3;
+    color: #f2efe9;
+    outline: none;
+    font-family: inherit;
+    resize: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .input-field::-webkit-scrollbar { display: none; }
+  .input-field::placeholder {
+    color: #6b6d76;
+  }
+  .send-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #0b84ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-bottom: 3px;
+  }
+
+  .back { cursor: pointer; }
+
+  .messages-view {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .lock-home-stack {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: none;
+  }
+
+  .home-view {
+    display: flex;
+    flex-direction: column;
+    padding: 28px 22px 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    transition: opacity 0.36s ease-out 0.14s, transform 0.4s cubic-bezier(.22,1,.36,1) 0.14s;
+  }
+  .home-view.revealing {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  .home-time {
+    display: none;
+  }
+  .home-date {
+    display: none;
+  }
+  .app-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px 0;
+  }
+  .app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .app-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .app-icon.messages { background: linear-gradient(160deg, #f2a65a, #d9812f); }
+  .app-icon.memories { background: linear-gradient(160deg, #4a4d58, #26272d); }
+  .app-icon.music { background: linear-gradient(160deg, #3e3346, #211c29); }
+  .app-icon.themes { background: linear-gradient(160deg, #2c4a4a, #182b2b); }
+  .app-icon.settings { background: linear-gradient(160deg, #3a3d46, #212329); }
+  .app-label {
+    font-size: 11.5px;
+    color: #d9dbe0;
+  }
+  .home-dock {
+    position: absolute;
+    bottom: 26px;
+    left: 22px;
+    right: 22px;
+    display: flex;
+    justify-content: center;
+    background: rgba(255,255,255,0.06);
+    border-radius: 24px;
+    padding: 12px 0;
+  }
+
+  .lock-view {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+    background: #0c0d10;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    transition: opacity 0.22s ease-out, transform 0.26s ease-out;
+  }
+  .lock-view.unlocking {
+    transform: scale(1.03) translateY(-14px);
+    opacity: 0;
+  }
+  .lock-view.unlocking > * {
+    transition: opacity 0.16s ease-out;
+    opacity: 0;
+  }
+  .lock-date {
+    margin-top: 62px;
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.95);
+    text-shadow: 0 1px 12px rgba(0,0,0,0.18);
+    letter-spacing: 0.2px;
+  }
+  .lock-time {
+    font-size: 76px;
+    font-weight: 200;
+    line-height: 1;
+    color: rgba(255,255,255,0.96);
+    text-shadow: 0 4px 26px rgba(0,0,0,0.2);
+    letter-spacing: -1px;
+    margin-top: 4px;
+  }
+  .lock-hint {
+    margin-top: 14px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.75);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.18);
+  }
+  .lock-actions {
+    position: absolute;
+    bottom: 34px;
+    left: 26px;
+    right: 26px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .lock-action-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.22);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+  }
+  .lock-home-indicator {
+    position: absolute;
+    bottom: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.85);
+  }
+
+  .wallpaper-section {
+    width: 100%;
+    margin-top: 22px;
+  }
+  .wallpaper-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .wallpaper-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .wallpaper-swatch {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+    background-color: #16171c;
+    background-size: cover;
+    background-position: center;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .wallpaper-swatch:active { transform: scale(0.96); }
+  .wallpaper-swatch.selected {
+    border-color: #f2a65a;
+  }
+  .wallpaper-label {
+    width: 100%;
+    padding: 5px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+    background: linear-gradient(0deg, rgba(0,0,0,0.45), transparent);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .wallpaper-label-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wallpaper-edit-icon {
+    flex: none;
+    font-size: 9px;
+    color: rgba(255,255,255,0.7);
+  }
+  .wallpaper-swatch.custom .wallpaper-label {
+    cursor: text;
+  }
+  .wallpaper-check {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #f2a65a;
+    color: #1a1200;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wallpaper-delete {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+    color: rgba(255,255,255,0.9);
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .wallpaper-delete:hover { background: rgba(180,40,40,0.85); }
+  .wallpaper-add {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed rgba(255,255,255,0.28);
+    background-color: transparent;
+  }
+  .wallpaper-add-icon {
+    font-size: 20px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.6);
+    line-height: 1;
+  }
+  .wallpaper-add .wallpaper-label {
+    background: none;
+    text-shadow: none;
+    text-align: center;
+    color: rgba(255,255,255,0.6);
+    padding: 4px 4px 0;
+  }
+
+  .simple-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    background-size: cover;
+    background-position: center;
+  }
+  #themesView .simple-header {
+    background: rgba(0,0,0,0.28);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-bottom-color: rgba(255,255,255,0.12);
+  }
+  #themesView .simple-text {
+    color: #e4e5ea;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+  }
+
+  /* Auto text-contrast: the .light-wallpaper class is added to
+     lockView/homeView/themesView (in applyWallpaper) whenever the current
+     wallpaper is light/white, so their text switches to black for
+     readability. Dark wallpapers leave the default light text untouched. */
+  .lock-view.light-wallpaper .lock-date,
+  .lock-view.light-wallpaper .lock-time,
+  .lock-view.light-wallpaper .lock-hint {
+    color: rgba(0,0,0,0.88) !important;
+    text-shadow: 0 1px 6px rgba(255,255,255,0.55) !important;
+  }
+  .home-view.light-wallpaper .app-label {
+    color: rgba(0,0,0,0.85) !important;
+  }
+  #themesView.light-wallpaper .simple-title,
+  #themesView.light-wallpaper .simple-text,
+  #themesView.light-wallpaper .wallpaper-section-title {
+    color: rgba(0,0,0,0.85) !important;
+    text-shadow: none !important;
+  }
+  .simple-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 12px 16px 14px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  }
+  .simple-header .back {
+    position: absolute;
+    left: 16px;
+  }
+  .simple-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f2efe9;
+  }
+  .simple-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 0 40px;
+  }
+  .simple-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .simple-text {
+    text-align: center;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #9a9ba3;
+  }
+
+  .convo-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 16px;
+  }
+  .convo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+    cursor: pointer;
+  }
+  .convo-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .convo-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .convo-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f2efe9;
+  }
+  .convo-time {
+    font-size: 11px;
+    color: #6b6d76;
+  }
+  .convo-preview {
+    font-size: 13px;
+    color: #9a9ba3;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .new-btn {
+    position: absolute;
+    right: 16px;
+    color: #f2a65a;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .convo-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 60px 30px 0;
+  }
+
+  .name-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 36px 24px 24px;
+  }
+  .name-prompt {
+    font-size: 15px;
+    color: #f2efe9;
+    text-align: center;
+  }
+  .name-input {
+    width: 100%;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid #34353d;
+    background: #17181c;
+    padding: 0 14px;
+    font-size: 14.5px;
+    color: #f2efe9;
+    outline: none;
+    font-family: inherit;
+    text-align: center;
+  }
+  .name-input::placeholder { color: #6b6d76; }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .chip {
+    font-size: 12.5px;
+    color: #d9dbe0;
+    background: #1c1d22;
+    border: 1px solid #2c2d34;
+    border-radius: 14px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .save-btn {
+    margin-top: 6px;
+    height: 38px;
+    padding: 0 24px;
+    border-radius: 19px;
+    border: none;
+    background: #0b84ff;
+    color: #ffffff;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .erase-btn {
+    height: 38px;
+    padding: 0 22px;
+    border-radius: 19px;
+    border: 1px solid #7a2c2c;
+    background: transparent;
+    color: #e2726f;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .inbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 12px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  }
+  .inbox-edit {
+    color: #f2a65a;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .inbox-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f2efe9;
+  }
+  .inbox-filter {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #1c1d22;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .convo-avatar-lg {
+    width: 46px;
+    height: 46px;
+    font-size: 16px;
+  }
+  .convo-chevron {
+    color: #4a4b52;
+    font-size: 17px;
+    margin-left: 6px;
+  }
+  .inbox-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px 22px;
+    border-top: 0.5px solid rgba(255,255,255,0.08);
+  }
+  .search-field {
+    flex: 1;
+    height: 36px;
+    border-radius: 10px;
+    background: #17181c;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    font-size: 14px;
+    color: #6b6d76;
+  }
+  .compose-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #1c1d22;
+    border: 1px solid #2c2d34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .inbox-filter { cursor: pointer; }
+
+  .selection-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 0.5px solid rgba(255,255,255,0.08);
+    font-size: 12.5px;
+    color: #9a9ba3;
+  }
+  .selection-bar.active { display: flex; }
+  .selection-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .delete-msg-btn {
+    background: #3a1414;
+    border: 1px solid #7a2c2c;
+    color: #e2726f;
+    border-radius: 14px;
+    padding: 4px 14px;
+    font-size: 12.5px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .delete-msg-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .filter-done {
+    color: #0b84ff;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #messagesList.select-mode .bubble-row {
+    cursor: pointer;
+  }
+  .bubble-row.selected .bubble {
+    outline: 2px solid #0b84ff;
+    outline-offset: 2px;
+  }
+
+  .convo-select-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid #4a4b52;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .convo-select-circle.checked {
+    background: #0b84ff;
+    border-color: #0b84ff;
+  }
+  .convo-select-circle svg { display: none; }
+  .convo-select-circle.checked svg { display: block; }
+
+  .select-all-circle {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #0b84ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .convo-selection-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 22px;
+    border-top: 0.5px solid rgba(255,255,255,0.08);
+    font-size: 12.5px;
+    color: #9a9ba3;
+  }
+  .convo-selection-bar.active { display: flex; }
+  .convo-delete-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #1c1d22;
+    border: 1px solid #2c2d34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .convo-delete-btn.disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .confirm-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .confirm-modal-overlay.active { display: flex; }
+  .confirm-modal {
+    width: 260px;
+    background: #1c1d22;
+    border: 1px solid #2c2d34;
+    border-radius: 16px;
+    padding: 22px 18px 18px;
+    text-align: center;
+  }
+  .confirm-modal-text {
+    font-size: 14px;
+    color: #f2efe9;
+    line-height: 1.4;
+    margin-bottom: 18px;
+  }
+  .confirm-modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .confirm-modal-btn {
+    flex: 1;
+    height: 36px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .confirm-modal-btn.no {
+    background: #2c2d34;
+    color: #d9dbe0;
+  }
+  .confirm-modal-btn.yes {
+    background: #7a2c2c;
+    color: #ffb4b0;
+  }
+  .confirm-modal-btn.save {
+    background: #f2a65a;
+    color: #1a1200;
+  }
+  .confirm-modal-input {
+    width: 100%;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid #34353d;
+    background: #17181c;
+    padding: 0 12px;
+    font-size: 14px;
+    color: #f2efe9;
+    outline: none;
+    font-family: inherit;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .confirm-modal-input::placeholder { color: #6b6d76; }
+</style>
+</head>
+<body>
+<div class="boot-intro" id="bootIntro">
+  <div class="boot-intro-text" id="bootIntroText"><span id="bootIntroTyped"></span><span class="boot-intro-cursor"></span></div>
+</div>
+<audio id="sentAudio" preload="auto"><source src="data:audio/mpeg;base64,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" type="audio/mpeg"></audio>
+<div class="room-bg-toggle" id="roomBgToggle" onclick="openRoomBgPanel()" title="Change background">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#d9dbe0" stroke-width="1.6"/><circle cx="8.5" cy="9.5" r="1.5" fill="#d9dbe0"/><path d="M3 16l5-4 4 3 4-5 5 6" stroke="#d9dbe0" stroke-width="1.6" fill="none"/></svg>
+</div>
+<div class="room-bg-overlay" id="roomBgOverlay">
+  <div class="room-bg-panel">
+    <div class="room-bg-panel-title">Change Background</div>
+    <div class="room-bg-grid" id="roomBgGrid"></div>
+    <input type="file" id="customRoomBgInput" accept="image/*" style="display:none" onchange="handleCustomRoomBgUpload(event)">
+    <button class="room-bg-close-btn" onclick="closeRoomBgPanel()">Done</button>
+  </div>
+</div>
+<div class="scene">
+  <div class="window"><div class="rain"></div></div>
+  <div class="lamp-glow"></div>
+
+  <div class="phone">
+    <div class="side-button" onclick="lockPhone()" title="Lock"></div>
+    <div class="screen">
+      <div class="dynamic-island"></div>
+
+      <div class="status-bar">
+        <span id="statusTime">9:41</span>
+        <div class="status-icons">
+          <svg width="17" height="10" viewBox="0 0 17 10" fill="none"><rect x="0" y="6" width="3" height="4" rx="0.5" fill="#f2efe9"/><rect x="4.5" y="4" width="3" height="6" rx="0.5" fill="#f2efe9"/><rect x="9" y="2" width="3" height="8" rx="0.5" fill="#f2efe9"/><rect x="13.5" y="0" width="3" height="10" rx="0.5" fill="#f2efe9"/></svg>
+          <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><path d="M7.5 10.5C8.3 10.5 9 9.8 9 9C9 8.2 8.3 7.5 7.5 7.5C6.7 7.5 6 8.2 6 9C6 9.8 6.7 10.5 7.5 10.5Z" fill="#f2efe9"/><path d="M4.3 6.8C5.2 5.9 6.3 5.5 7.5 5.5C8.7 5.5 9.8 5.9 10.7 6.8" stroke="#f2efe9" stroke-width="1.2" stroke-linecap="round"/><path d="M1.8 4.3C3.4 2.7 5.4 1.8 7.5 1.8C9.6 1.8 11.6 2.7 13.2 4.3" stroke="#f2efe9" stroke-width="1.2" stroke-linecap="round"/></svg>
+          <svg width="24" height="11" viewBox="0 0 24 11" fill="none"><rect x="0.75" y="0.75" width="19.5" height="9.5" rx="2.5" stroke="#f2efe9" stroke-width="1"/><rect x="2" y="2" width="16" height="7" rx="1.3" fill="#f2efe9"/><rect x="21" y="3.3" width="1.6" height="4.4" rx="0.8" fill="#f2efe9"/></svg>
+        </div>
+      </div>
+
+      <div class="lock-home-stack" id="lockHomeStack">
+      <div class="lock-view" id="lockView" onclick="unlockPhone()">
+        <div class="lock-date" id="lockDate">Tue Jul 1</div>
+        <div class="lock-time" id="lockTime">9:41</div>
+        <div class="lock-hint">Tap to unlock</div>
+        <div class="lock-actions">
+          <div class="lock-action-btn" onclick="event.stopPropagation();">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 2h6l-1 6h3l-8 12 2-9H8l1-9z" fill="#ffffff"/></svg>
+          </div>
+          <div class="lock-action-btn" onclick="event.stopPropagation();">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="14" r="3.4" stroke="#ffffff" stroke-width="1.6"/></svg>
+          </div>
+        </div>
+        <div class="lock-home-indicator"></div>
+      </div>
+
+      <div class="home-view" id="homeView">
+        <div class="home-time" id="homeTime">9:41</div>
+        <div class="home-date" id="homeDate">Tuesday, 1 July</div>
+        <div class="app-grid">
+          <div class="app" onclick="showScreen('conversations')">
+            <div class="app-icon messages">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v13H8l-4 4V4z" fill="#241505"/></svg>
+            </div>
+            <div class="app-label">Messages</div>
+          </div>
+          <div class="app" onclick="showScreen('memories')">
+            <div class="app-icon memories">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#d9dbe0" stroke-width="1.4"/><circle cx="8.5" cy="10" r="1.6" fill="#d9dbe0"/><path d="M3 16l5-4 4 3 4-5 5 6" stroke="#d9dbe0" stroke-width="1.4" fill="none"/></svg>
+            </div>
+            <div class="app-label">Memories</div>
+          </div>
+          <div class="app" onclick="showScreen('music')">
+            <div class="app-icon music">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="#d9dbe0" stroke-width="1.4" fill="none"/><circle cx="6.5" cy="18" r="2.5" stroke="#d9dbe0" stroke-width="1.4"/><circle cx="17.5" cy="16" r="2.5" stroke="#d9dbe0" stroke-width="1.4"/></svg>
+            </div>
+            <div class="app-label">Music</div>
+          </div>
+          <div class="app" onclick="showScreen('themes')">
+            <div class="app-icon themes">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#d9dbe0" stroke-width="1.4"/><path d="M12 4v16M4 12h16" stroke="#d9dbe0" stroke-width="1.2"/></svg>
+            </div>
+            <div class="app-label">Themes</div>
+          </div>
+          <div class="app" onclick="showScreen('settings')">
+            <div class="app-icon settings">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#d9dbe0" stroke-width="1.4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" stroke="#d9dbe0" stroke-width="1.4"/></svg>
+            </div>
+            <div class="app-label">Settings</div>
+          </div>
+        </div>
+        <div class="home-dock">
+          <div class="app" onclick="showScreen('conversations')">
+            <div class="app-icon messages">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v13H8l-4 4V4z" fill="#241505"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="simple-view" id="conversationsView">
+        <div class="inbox-header">
+          <span class="inbox-edit" id="inboxLeftSlot" onclick="showScreen('home')">Home</span>
+          <div class="inbox-title">Messages</div>
+          <div class="inbox-filter" id="inboxRightSlot" onclick="toggleConvoSelectMode()">
+            <svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M0 1h15M2.5 6h10M5.5 11h4" stroke="#d9dbe0" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div class="convo-list">
+          <div class="convo-empty" id="convoEmpty">
+            <p class="simple-text">No conversations yet.</p>
+          </div>
+          <div id="convoListItems"></div>
+        </div>
+        <div class="inbox-footer" id="inboxFooter">
+          <div class="search-field" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#6b6d76" stroke-width="1.6"/><path d="M20 20l-4-4" stroke="#6b6d76" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Search</span>
+          </div>
+          <div class="compose-btn" onclick="showScreen('name')">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l11-11-4-4L4 16v4z" stroke="#0b84ff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="convo-selection-bar" id="convoSelectionBar">
+          <span id="convoSelectionLabel">Select conversations to delete</span>
+          <div class="convo-delete-btn" id="convoDeleteBtn" onclick="deleteSelectedConversations()">
+            <svg width="15" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13" stroke="#e2726f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="simple-view" id="nameView">
+        <div class="simple-header">
+          <span class="back" id="nameBack" onclick="showScreen('conversations')">&#8249; Back</span>
+          <div class="simple-title">New conversation</div>
+        </div>
+        <div class="name-body">
+          <p class="name-prompt">Who is this message for?</p>
+          <input class="name-input" id="nameInput" type="text" placeholder="Type a name..." />
+          <div class="chip-row">
+            <span class="chip" onclick="pickName('Mom')">Mom</span>
+            <span class="chip" onclick="pickName('Dad')">Dad</span>
+            <span class="chip" onclick="pickName('Someone I lost')">Someone I lost</span>
+            <span class="chip" onclick="pickName('An old friend')">An old friend</span>
+            <span class="chip" onclick="pickName('My ex')">My ex</span>
+            <span class="chip" onclick="pickName('My future self')">My future self</span>
+            <span class="chip" onclick="pickName('Someone...')">Someone...</span>
+          </div>
+          <button class="save-btn" onclick="confirmName()">Save</button>
+        </div>
+      </div>
+
+      <div class="simple-view" id="memoriesView">
+        <div class="simple-header">
+          <span class="back" onclick="showScreen('home')">&#8249; Home</span>
+          <div class="simple-title">Memories</div>
+        </div>
+        <div class="simple-body">
+          <div class="simple-icon memories">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#d9dbe0" stroke-width="1.4"/><circle cx="8.5" cy="10" r="1.6" fill="#d9dbe0"/><path d="M3 16l5-4 4 3 4-5 5 6" stroke="#d9dbe0" stroke-width="1.4" fill="none"/></svg>
+          </div>
+          <p class="simple-text">Pictures, songs and places attached to the conversation will live here.</p>
+        </div>
+      </div>
+
+      <div class="simple-view" id="musicView">
+        <div class="simple-header">
+          <span class="back" onclick="showScreen('home')">&#8249; Home</span>
+          <div class="simple-title">Music</div>
+        </div>
+        <div class="simple-body">
+          <div class="simple-icon music">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="#d9dbe0" stroke-width="1.4" fill="none"/><circle cx="6.5" cy="18" r="2.5" stroke="#d9dbe0" stroke-width="1.4"/><circle cx="17.5" cy="16" r="2.5" stroke="#d9dbe0" stroke-width="1.4"/></svg>
+          </div>
+          <p class="simple-text">Lo-fi, rain, fireplace, ocean or silence — pick the ambience for writing.</p>
+        </div>
+      </div>
+
+      <div class="simple-view" id="themesView">
+        <div class="simple-header">
+          <span class="back" onclick="showScreen('home')">&#8249; Home</span>
+          <div class="simple-title">Themes</div>
+        </div>
+        <div class="simple-body">
+          <div class="simple-icon themes">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#d9dbe0" stroke-width="1.4"/><path d="M12 4v16M4 12h16" stroke="#d9dbe0" stroke-width="1.2"/></svg>
+          </div>
+          <p class="simple-text">Classic iPhone, Android, Pink, Black, Blue, Minimal or Notebook.</p>
+          <div class="wallpaper-section">
+            <div class="wallpaper-section-title">Wallpaper</div>
+            <div class="wallpaper-grid" id="themeWallpaperGrid"></div>
+            <input type="file" id="customWallpaperInput" accept="image/*" style="display:none" onchange="handleCustomWallpaperUpload(event)">
+          </div>
+        </div>
+      </div>
+
+      <div class="simple-view" id="settingsView">
+        <div class="simple-header">
+          <span class="back" onclick="showScreen('home')">&#8249; Home</span>
+          <div class="simple-title">Settings</div>
+        </div>
+        <div class="simple-body">
+          <div class="simple-icon settings">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#d9dbe0" stroke-width="1.4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" stroke="#d9dbe0" stroke-width="1.4"/></svg>
+          </div>
+          <p class="simple-text">The conversation stays exactly as you leave it until you erase it.</p>
+          <button class="erase-btn" onclick="openEraseConfirm()">Erase Conversations</button>
+        </div>
+      </div>
+
+      <div class="messages-view" id="chatView">
+        <div class="nav-header">
+          <div class="nav-top">
+            <span class="back" onclick="exitSelectMode(); showScreen('conversations')">&#8249; Messages</span>
+            <div class="avatar" id="chatAvatar">A</div>
+          </div>
+          <div class="contact-name" id="chatContactName">Alex</div>
+          <div class="contact-sub">iMessage</div>
+        </div>
+
+        <div class="messages-wrap" id="messagesWrap">
+          <div class="messages" id="messagesList">
+            <div class="date-divider">Today</div>
+          </div>
+          <div class="custom-scrollbar" id="customScrollbar">
+            <div class="custom-scrollbar-thumb" id="scrollThumb"></div>
+          </div>
+        </div>
+
+        <div class="selection-bar" id="selectionBar">
+          <span id="selectionLabel">Tap a message to select it</span>
+          <div class="selection-actions">
+            <button class="delete-msg-btn" id="deleteMsgBtn" disabled onclick="deleteSelectedMessage()">Delete</button>
+            <span class="filter-done" onclick="exitSelectMode()">Done</span>
+          </div>
+        </div>
+
+        <div class="input-bar">
+          <textarea class="input-field" id="messageInput" rows="1" placeholder="Write a message..." onkeydown="handleInputKeydown(event)" oninput="autoGrowInput()"></textarea>
+          <div class="send-btn" onclick="sendMessage()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12L20 4L14 20L11 13L4 12Z" fill="#ffffff"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirm-modal-overlay" id="deleteConfirmOverlay">
+        <div class="confirm-modal">
+          <p class="confirm-modal-text">Are you sure? This cannot be undone.</p>
+          <div class="confirm-modal-actions">
+            <button class="confirm-modal-btn no" onclick="cancelDeleteConvos()">No</button>
+            <button class="confirm-modal-btn yes" onclick="confirmDeleteConvos()">Yes</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirm-modal-overlay" id="eraseConfirmOverlay">
+        <div class="confirm-modal">
+          <p class="confirm-modal-text">Are you sure? This cannot be undone.</p>
+          <div class="confirm-modal-actions">
+            <button class="confirm-modal-btn no" onclick="cancelEraseAll()">No</button>
+            <button class="confirm-modal-btn yes" onclick="confirmEraseAll()">Yes</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirm-modal-overlay" id="wallpaperNameOverlay">
+        <div class="confirm-modal">
+          <p class="confirm-modal-text" id="wallpaperNameModalTitle">Name this background</p>
+          <input type="text" class="confirm-modal-input" id="wallpaperNameInput" maxlength="18" placeholder="Custom" onkeydown="handleWallpaperNameKeydown(event)">
+          <div class="confirm-modal-actions">
+            <button class="confirm-modal-btn no" onclick="cancelWallpaperName()">Cancel</button>
+            <button class="confirm-modal-btn save" onclick="confirmWallpaperName()">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirm-modal-overlay" id="wallpaperDeleteOverlay">
+        <div class="confirm-modal">
+          <p class="confirm-modal-text" id="wallpaperDeleteModalText">Delete this background? This cannot be undone.</p>
+          <div class="confirm-modal-actions">
+            <button class="confirm-modal-btn no" onclick="cancelDeleteWallpaper()">No</button>
+            <button class="confirm-modal-btn yes" onclick="confirmDeleteWallpaper()">Yes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  var screens = ['lock', 'home', 'conversations', 'name', 'chat', 'memories', 'music', 'themes', 'settings'];
+
+  // Each conversation: { id, name, messages: [{text, sender}], lastPreview, lastTime }
+  var conversations = [];
+  var nextConvoId = 1;
+  var currentChatId = null;
+  var currentTimeLabel = '';
+
+  // ---- Persistent storage ----
+  // window.storage (a DataStore-like API) only exists when this page is
+  // rendered inside a Claude.ai artifact frame. Opened as a plain HTML
+  // file (double-clicked, hosted elsewhere, etc.) that object doesn't
+  // exist — so we fall back to localStorage with the same get/set/delete
+  // shape. Either way, saves actually happen.
+  var storageBackend = (typeof window.storage !== 'undefined' && window.storage !== null) ? 'datastore' : 'local';
+  var LOCAL_PREFIX = 'unsent:';
+  var STORAGE_INDEX_KEY = 'convo-index';
+  var STORAGE_MSGS_PREFIX = 'convo-msgs:';
+  var STORAGE_DRAFT_PREFIX = 'draft:';
+  var STORAGE_WALLPAPER_KEY = 'wallpaper-state';
+
+  // ---- Wallpaper (Themes) ----
+  // Picking a background in Themes updates the lock + home screen, and
+  // also lives-previews on the Themes screen itself (the screen's own
+  // background swaps in real time as you tap between options), so you can
+  // see the change as you make it. Custom uploads join the presets here.
+  var wallpapers = [
+    { id: 'default', label: 'Default', bg: '#0c0d10' },
+    { id: 'lofi', label: 'Lo-fi', bg: 'linear-gradient(160deg, #3e3346, #211c29)' },
+    { id: 'rain', label: 'Rain', bg: 'linear-gradient(160deg, #0d1a2b 0%, #0a1220 100%)' },
+    { id: 'fireplace', label: 'Fireplace', bg: 'linear-gradient(160deg, #3a1f12 0%, #1c0d06 60%, #0d0603 100%)' },
+    { id: 'ocean', label: 'Ocean', bg: 'linear-gradient(160deg, #0d2b30 0%, #071417 100%)' },
+    { id: 'silence', label: 'Silence', bg: 'linear-gradient(160deg, #101114 0%, #08090b 100%)' }
+  ];
+  var currentWallpaperId = 'default';
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function applyWallpaper(id, skipSave) {
+    var wp = wallpapers.find(function (w) { return w.id === id; });
+    if (!wp) return;
+    currentWallpaperId = id;
+    var lock = document.getElementById('lockView');
+    var home = document.getElementById('homeView');
+    var themes = document.getElementById('themesView');
+    if (lock) lock.style.background = wp.bg;
+    if (home) home.style.background = wp.bg;
+    if (themes) themes.style.background = wp.bg;
+    updateWallpaperContrast(wp);
+    renderWallpaperGrids();
+    if (!skipSave) saveWallpaperState();
+  }
+
+  // ---- Boot intro ----
+  // Blank black screen with the message typing itself out in the middle.
+  // Once fully typed it holds for 3 seconds, then fades away, plays the
+  // "sent" sound, and reveals the phone + background underneath.
+  // Browsers only allow audio-with-sound to autoplay once the page has
+  // seen a user gesture (tap/click/key). The boot intro fires on a
+  // timer with no gesture behind it, so playback silently gets blocked
+  // depending on how the page was opened. Two-part fix: "unlock" the
+  // audio element on the very first interaction anywhere on the page
+  // (play+immediately-pause, inaudible), which satisfies that gesture
+  // requirement for the rest of the session; and if the boot intro's
+  // own play() call still gets blocked, queue it to fire on the next
+  // interaction instead of dropping it for good.
+  var audioUnlocked = false;
+  var sentSoundPending = false;
+
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    var audio = document.getElementById('sentAudio');
+    if (!audio) return;
+    var p = audio.play();
+    if (p && p.then) {
+      p.then(function () {
+        audio.pause();
+        audio.currentTime = 0;
+        if (sentSoundPending) {
+          sentSoundPending = false;
+          playSentSound();
+        }
+      }).catch(function () {});
+    }
+  }
+  function retryPendingSentSound() {
+    if (!sentSoundPending) return;
+    sentSoundPending = false;
+    playSentSound();
+  }
+  ['pointerdown', 'touchstart', 'keydown'].forEach(function (evt) {
+    document.addEventListener(evt, unlockAudio, { passive: true });
+    document.addEventListener(evt, retryPendingSentSound, { passive: true });
+  });
+
+  function playSentSound() {
+    var audio = document.getElementById('sentAudio');
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      var p = audio.play();
+      if (p && p.catch) {
+        p.catch(function () {
+          // Still blocked (no gesture yet at all) — don't lose it,
+          // play it as soon as the player next interacts with the page.
+          sentSoundPending = true;
+        });
+      }
+    } catch (e) {}
+  }
+
+  function runBootIntro() {
+    var text = '𝑾𝒉𝒆𝒏 𝒚𝒐𝒖 𝒓𝒆𝒂𝒅 𝒕𝒉𝒊𝒔.....';
+    var chars = Array.from(text);
+    var typedEl = document.getElementById('bootIntroTyped');
+    var introEl = document.getElementById('bootIntro');
+    var sceneEl = document.querySelector('.scene');
+    if (!typedEl || !introEl) return;
+    var i = 0;
+    var typeInterval = setInterval(function () {
+      i++;
+      typedEl.textContent = chars.slice(0, i).join('');
+      if (i >= chars.length) {
+        clearInterval(typeInterval);
+        setTimeout(function () {
+          // Fade the text out first, on its own, while the screen is
+          // still solid black underneath it. Play the sound right here,
+          // in step with the text vanishing, instead of waiting for the
+          // screen fade that follows.
+          typedEl.parentElement.classList.add('boot-intro-text-hidden');
+          playSentSound();
+          setTimeout(function () {
+            // Text is gone — now fade the black screen away completely
+            // before the phone starts to appear, so nothing overlaps.
+            introEl.classList.add('boot-intro-hidden');
+            setTimeout(function () {
+              introEl.style.display = 'none';
+              if (sceneEl) sceneEl.classList.add('scene-visible');
+              var roomBgToggleEl = document.getElementById('roomBgToggle');
+              if (roomBgToggleEl) roomBgToggleEl.classList.add('room-bg-toggle-visible');
+            }, 700);
+          }, 500);
+        }, 3000);
+      }
+    }, 130);
+  }
+
+  // ---- Auto text-contrast ----
+  // Figures out whether the active wallpaper is light or dark and flips
+  // the lock/home/themes text to black on light backgrounds so it stays
+  // readable, leaving the default light text alone on dark backgrounds.
+  var wallpaperContrastToken = 0;
+
+  function relativeLuminance(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
+    var r = parseInt(hex.substr(0, 2), 16) / 255;
+    var g = parseInt(hex.substr(2, 2), 16) / 255;
+    var b = parseInt(hex.substr(4, 2), 16) / 255;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function setWallpaperContrast(isLight) {
+    ['lockView', 'homeView', 'themesView'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('light-wallpaper', isLight);
+    });
+  }
+
+  function updateWallpaperContrast(wp) {
+    var token = ++wallpaperContrastToken;
+    var bg = wp.bg || '';
+    var urlMatch = bg.match(/^url\((.+?)\)/);
+    if (urlMatch) {
+      // Custom photo wallpaper: sample the image itself for brightness.
+      var src = urlMatch[1].trim().replace(/^["']|["']$/g, '');
+      var img = new Image();
+      img.onload = function () {
+        if (token !== wallpaperContrastToken) return;
+        try {
+          var size = 24;
+          var canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, size, size);
+          var data = ctx.getImageData(0, 0, size, size).data;
+          var total = 0, count = 0;
+          for (var i = 0; i < data.length; i += 4) {
+            total += 0.2126 * (data[i] / 255) + 0.7152 * (data[i + 1] / 255) + 0.0722 * (data[i + 2] / 255);
+            count++;
+          }
+          setWallpaperContrast(count > 0 && (total / count) > 0.6);
+        } catch (e) {
+          setWallpaperContrast(false);
+        }
+      };
+      img.onerror = function () {
+        if (token === wallpaperContrastToken) setWallpaperContrast(false);
+      };
+      img.src = src;
+    } else {
+      // Solid color or gradient: average the luminance of its hex stops.
+      var hexes = bg.match(/#[0-9a-fA-F]{3,6}/g);
+      if (!hexes || !hexes.length) {
+        setWallpaperContrast(false);
+        return;
+      }
+      var sum = 0;
+      hexes.forEach(function (h) { sum += relativeLuminance(h); });
+      setWallpaperContrast((sum / hexes.length) > 0.6);
+    }
+  }
+
+  function renderWallpaperGrids() {
+    renderWallpaperGrid('themeWallpaperGrid', true);
+  }
+
+  function renderWallpaperGrid(containerId, includeAddTile) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    var html = '';
+    wallpapers.forEach(function (wp) {
+      var selected = wp.id === currentWallpaperId;
+      var isCustom = wp.id.indexOf('custom-') === 0;
+      var safeLabel = escapeHtml(wp.label);
+      html += '<div class="wallpaper-swatch' + (selected ? ' selected' : '') + (isCustom ? ' custom' : '') +
+        '" style="background:' + wp.bg + '" onclick="applyWallpaper(\'' + wp.id + '\')" title="' + safeLabel + '">' +
+        (isCustom ? '<span class="wallpaper-delete" onclick="event.stopPropagation(); deleteCustomWallpaper(\'' + wp.id + '\')" title="Delete">&times;</span>' : '') +
+        (selected ? '<span class="wallpaper-check">&#10003;</span>' : '') +
+        '<span class="wallpaper-label"' + (isCustom ? ' onclick="event.stopPropagation(); renameCustomWallpaper(\'' + wp.id + '\')"' : '') + '>' +
+        '<span class="wallpaper-label-text">' + safeLabel + '</span>' +
+        (isCustom ? '<span class="wallpaper-edit-icon">&#9998;</span>' : '') +
+        '</span></div>';
+    });
+    if (includeAddTile) {
+      html += '<div class="wallpaper-swatch wallpaper-add" onclick="document.getElementById(\'customWallpaperInput\').click()">' +
+        '<span class="wallpaper-add-icon">+</span><span class="wallpaper-label"><span class="wallpaper-label-text">Custom</span></span></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  var pendingWallpaperDataUrl = null;
+  var wallpaperNameMode = 'add';
+  var wallpaperNameTargetId = null;
+  var pendingDeleteWallpaperId = null;
+
+  function handleCustomWallpaperUpload(event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      pendingWallpaperDataUrl = e.target.result;
+      openWallpaperNameModal('add', null, '');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function renameCustomWallpaper(id) {
+    var wp = wallpapers.find(function (w) { return w.id === id; });
+    if (!wp) return;
+    openWallpaperNameModal('rename', id, wp.label);
+  }
+
+  function openWallpaperNameModal(mode, targetId, existingName) {
+    wallpaperNameMode = mode;
+    wallpaperNameTargetId = targetId || null;
+    var overlay = document.getElementById('wallpaperNameOverlay');
+    var title = document.getElementById('wallpaperNameModalTitle');
+    var input = document.getElementById('wallpaperNameInput');
+    title.textContent = mode === 'rename' ? 'Rename this background' : 'Name this background';
+    input.value = existingName || '';
+    overlay.classList.add('active');
+    setTimeout(function () { input.focus(); input.select(); }, 50);
+  }
+
+  function cancelWallpaperName() {
+    document.getElementById('wallpaperNameOverlay').classList.remove('active');
+    pendingWallpaperDataUrl = null;
+    wallpaperNameTargetId = null;
+  }
+
+  function confirmWallpaperName() {
+    var input = document.getElementById('wallpaperNameInput');
+    var name = input.value.trim().slice(0, 18);
+    if (!name) name = 'Custom';
+    document.getElementById('wallpaperNameOverlay').classList.remove('active');
+    if (wallpaperNameMode === 'add') {
+      if (!pendingWallpaperDataUrl) return;
+      var id = 'custom-' + Date.now();
+      var bg = 'url(' + JSON.stringify(pendingWallpaperDataUrl) + ') center / cover no-repeat';
+      wallpapers.unshift({ id: id, label: name, bg: bg });
+      pendingWallpaperDataUrl = null;
+      applyWallpaper(id);
+    } else {
+      var wp = wallpapers.find(function (w) { return w.id === wallpaperNameTargetId; });
+      if (wp) {
+        wp.label = name;
+        renderWallpaperGrids();
+        saveWallpaperState();
+      }
+      wallpaperNameTargetId = null;
+    }
+  }
+
+  function handleWallpaperNameKeydown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      confirmWallpaperName();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelWallpaperName();
+    }
+  }
+
+  function deleteCustomWallpaper(id) {
+    var wp = wallpapers.find(function (w) { return w.id === id; });
+    if (!wp) return;
+    pendingDeleteWallpaperId = id;
+    document.getElementById('wallpaperDeleteModalText').textContent = 'Delete "' + wp.label + '"? This cannot be undone.';
+    document.getElementById('wallpaperDeleteOverlay').classList.add('active');
+  }
+
+  function cancelDeleteWallpaper() {
+    document.getElementById('wallpaperDeleteOverlay').classList.remove('active');
+    pendingDeleteWallpaperId = null;
+  }
+
+  function confirmDeleteWallpaper() {
+    var id = pendingDeleteWallpaperId;
+    document.getElementById('wallpaperDeleteOverlay').classList.remove('active');
+    pendingDeleteWallpaperId = null;
+    if (!id) return;
+    var idx = wallpapers.findIndex(function (w) { return w.id === id; });
+    if (idx === -1) return;
+    wallpapers.splice(idx, 1);
+    if (currentWallpaperId === id) {
+      applyWallpaper('default');
+    } else {
+      renderWallpaperGrids();
+      saveWallpaperState();
+    }
+  }
+
+  function saveWallpaperState() {
+    var customWallpapers = wallpapers.filter(function (w) { return w.id.indexOf('custom-') === 0; });
+    storageSetSafe(STORAGE_WALLPAPER_KEY, JSON.stringify({
+      currentWallpaperId: currentWallpaperId,
+      customWallpapers: customWallpapers
+    }));
+  }
+
+  function loadWallpaperState() {
+    return storageGetSafe(STORAGE_WALLPAPER_KEY).then(function (raw) {
+      if (!raw) return;
+      var saved;
+      try { saved = JSON.parse(raw); } catch (e) { return; }
+      (saved.customWallpapers || []).forEach(function (wp) {
+        if (!wallpapers.some(function (w) { return w.id === wp.id; })) {
+          wallpapers.unshift(wp);
+        }
+      });
+      if (saved.currentWallpaperId && wallpapers.some(function (w) { return w.id === saved.currentWallpaperId; })) {
+        currentWallpaperId = saved.currentWallpaperId;
+      }
+    }).catch(function () {});
+  }
+
+  // ---- Room background ----
+  // Lets people restyle the backdrop behind the phone itself: a few
+  // preset moods plus a custom photo upload. Separate from the phone's
+  // own wallpaper picker, since this changes the "room" the phone sits
+  // in, not anything on its screen.
+  var STORAGE_ROOMBG_KEY = 'room-bg-state';
+  var sceneBackgrounds = [
+    { id: 'default', label: 'Cozy', bg: 'radial-gradient(ellipse 900px 500px at 78% 88%, rgba(217,142,63,0.16), transparent 65%), linear-gradient(160deg, #0a0d16 0%, #05060a 55%, #030308 100%)' },
+    { id: 'midnight', label: 'Midnight', bg: 'linear-gradient(160deg, #0d1b2b 0%, #050a12 60%, #02040a 100%)' },
+    { id: 'sunset', label: 'Sunset', bg: 'linear-gradient(160deg, #2d1b3d 0%, #4a2545 40%, #1a0f1f 100%)' },
+    { id: 'forest', label: 'Forest', bg: 'linear-gradient(160deg, #10241c 0%, #0a1712 55%, #050b08 100%)' },
+    { id: 'mono', label: 'Mono', bg: 'linear-gradient(160deg, #1c1c1e 0%, #0a0a0b 100%)' }
+  ];
+  var currentRoomBgId = 'default';
+
+  function applyRoomBackground(id, skipSave) {
+    var bg = sceneBackgrounds.find(function (b) { return b.id === id; });
+    if (!bg) return;
+    currentRoomBgId = id;
+    var sceneEl = document.querySelector('.scene');
+    if (sceneEl) sceneEl.style.background = bg.bg;
+    // The window + rain sketch is part of the default "cozy" look — once
+    // a different background is picked, it no longer makes sense sitting
+    // on top of it, so it fades away.
+    var windowEl = document.querySelector('.window');
+    if (windowEl) windowEl.classList.toggle('room-bg-decor-hidden', id !== 'default');
+    renderRoomBgGrid();
+    if (!skipSave) saveRoomBgState();
+  }
+
+  function renderRoomBgGrid() {
+    var el = document.getElementById('roomBgGrid');
+    if (!el) return;
+    var html = '';
+    sceneBackgrounds.forEach(function (b) {
+      var selected = b.id === currentRoomBgId;
+      html += '<div class="room-bg-swatch' + (selected ? ' selected' : '') +
+        '" style="background:' + b.bg + '" onclick="applyRoomBackground(\'' + b.id + '\')" title="' + escapeHtml(b.label) + '">' +
+        (selected ? '<span class="room-bg-swatch-check">&#10003;</span>' : '') + '</div>';
+    });
+    html += '<div class="room-bg-swatch add" onclick="document.getElementById(\'customRoomBgInput\').click()" title="Upload a photo">+</div>';
+    el.innerHTML = html;
+  }
+
+  function handleCustomRoomBgUpload(event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var id = 'custom-' + Date.now();
+      var bg = 'url(' + JSON.stringify(e.target.result) + ') center / cover no-repeat';
+      sceneBackgrounds.unshift({ id: id, label: 'Custom', bg: bg });
+      applyRoomBackground(id);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function openRoomBgPanel() {
+    renderRoomBgGrid();
+    var overlay = document.getElementById('roomBgOverlay');
+    if (overlay) overlay.classList.add('active');
+  }
+  function closeRoomBgPanel() {
+    var overlay = document.getElementById('roomBgOverlay');
+    if (overlay) overlay.classList.remove('active');
+  }
+
+  function saveRoomBgState() {
+    var customBgs = sceneBackgrounds.filter(function (b) { return b.id.indexOf('custom-') === 0; });
+    storageSetSafe(STORAGE_ROOMBG_KEY, JSON.stringify({
+      currentRoomBgId: currentRoomBgId,
+      customBgs: customBgs
+    }));
+  }
+
+  function loadRoomBgState() {
+    return storageGetSafe(STORAGE_ROOMBG_KEY).then(function (raw) {
+      if (!raw) return;
+      var saved;
+      try { saved = JSON.parse(raw); } catch (e) { return; }
+      (saved.customBgs || []).forEach(function (b) {
+        if (!sceneBackgrounds.some(function (x) { return x.id === b.id; })) {
+          sceneBackgrounds.unshift(b);
+        }
+      });
+      if (saved.currentRoomBgId && sceneBackgrounds.some(function (b) { return b.id === saved.currentRoomBgId; })) {
+        currentRoomBgId = saved.currentRoomBgId;
+      }
+    }).catch(function () {});
+  }
+
+  var indexDirty = false;
+  var msgsDirtyIds = {};
+  var draftDirty = false;
+
+  function markIndexDirty() { indexDirty = true; }
+  function markMsgsDirty(id) { msgsDirtyIds[id] = true; }
+
+  function storageSetSafe(key, value) {
+    if (storageBackend === 'datastore') {
+      window.storage.set(key, value, false).catch(function (e) {
+        console.error('Save failed for', key, e);
+      });
+      return;
+    }
+    try {
+      localStorage.setItem(LOCAL_PREFIX + key, value);
+    } catch (e) {
+      console.error('Save failed for', key, e);
+    }
+  }
+  function storageDeleteSafe(key) {
+    if (storageBackend === 'datastore') {
+      window.storage.delete(key, false).catch(function () {});
+      return;
+    }
+    try {
+      localStorage.removeItem(LOCAL_PREFIX + key);
+    } catch (e) {}
+  }
+  function storageGetSafe(key) {
+    if (storageBackend === 'datastore') {
+      return window.storage.get(key, false).then(function (res) {
+        return res ? res.value : null;
+      }).catch(function () {
+        return null;
+      });
+    }
+    var value = null;
+    try {
+      value = localStorage.getItem(LOCAL_PREFIX + key);
+    } catch (e) {
+      value = null;
+    }
+    return Promise.resolve(value);
+  }
+
+  function flushDirty() {
+    if (indexDirty) {
+      indexDirty = false;
+      var payload = {
+        nextConvoId: nextConvoId,
+        list: conversations.map(function (c) {
+          return { id: c.id, name: c.name, lastPreview: c.lastPreview, lastTime: c.lastTime, lastTimestamp: c.lastTimestamp };
+        })
+      };
+      storageSetSafe(STORAGE_INDEX_KEY, JSON.stringify(payload));
+    }
+    Object.keys(msgsDirtyIds).forEach(function (idStr) {
+      delete msgsDirtyIds[idStr];
+      var id = Number(idStr);
+      var convo = getConvo(id);
+      if (convo) {
+        storageSetSafe(STORAGE_MSGS_PREFIX + id, JSON.stringify(convo.messages));
+      }
+    });
+    if (draftDirty && currentChatId !== null) {
+      draftDirty = false;
+      var input = document.getElementById('messageInput');
+      var text = input ? input.value : '';
+      if (text) {
+        storageSetSafe(STORAGE_DRAFT_PREFIX + currentChatId, text);
+      } else {
+        storageDeleteSafe(STORAGE_DRAFT_PREFIX + currentChatId);
+      }
+    }
+  }
+
+  function loadState() {
+    return storageGetSafe(STORAGE_INDEX_KEY).then(function (raw) {
+      if (!raw) return;
+      var idx;
+      try { idx = JSON.parse(raw); } catch (e) { return; }
+      nextConvoId = idx.nextConvoId || 1;
+      var list = idx.list || [];
+      return Promise.all(list.map(function (item) {
+        return storageGetSafe(STORAGE_MSGS_PREFIX + item.id).then(function (msgsRaw) {
+          var messages = [];
+          if (msgsRaw) {
+            try { messages = JSON.parse(msgsRaw); } catch (e) { messages = []; }
+          }
+          conversations.push({
+            id: item.id,
+            name: item.name,
+            lastPreview: item.lastPreview,
+            lastTime: item.lastTime,
+            lastTimestamp: item.lastTimestamp,
+            messages: messages
+          });
+        });
+      }));
+    });
+  }
+
+  function loadDraftForChat(id) {
+    storageGetSafe(STORAGE_DRAFT_PREFIX + id).then(function (text) {
+      if (currentChatId !== id) return;
+      if (!text) return;
+      var input = document.getElementById('messageInput');
+      input.value = text;
+      autoGrowInput();
+    });
+  }
+
+  function flushDraftNow() {
+    if (currentChatId === null) return;
+    var input = document.getElementById('messageInput');
+    var text = input ? input.value : '';
+    if (text) {
+      storageSetSafe(STORAGE_DRAFT_PREFIX + currentChatId, text);
+    } else {
+      storageDeleteSafe(STORAGE_DRAFT_PREFIX + currentChatId);
+    }
+    draftDirty = false;
+  }
+  var convoSelectMode = false;
+  var selectedConvoIds = [];
+
+  function showScreen(name) {
+    if (name !== 'conversations' && convoSelectMode) exitConvoSelectMode();
+    if (name !== 'chat' && currentChatId !== null) flushDraftNow();
+    screens.forEach(function (s) {
+      var el = document.getElementById(s + 'View');
+      if (!el) return;
+      el.style.display = (s === name) ? 'flex' : 'none';
+    });
+    // lockView and homeView live inside a shared stack (so unlockPhone can
+    // crossfade between them) — keep that wrapper visible whenever either
+    // one is the active screen.
+    var stack = document.getElementById('lockHomeStack');
+    if (stack) stack.style.display = (name === 'lock' || name === 'home') ? 'flex' : 'none';
+    if (name === 'conversations') renderConversations();
+    if (name === 'name') {
+      document.getElementById('nameInput').value = '';
+      document.getElementById('nameBack').style.display = conversations.length ? 'flex' : 'none';
+    }
+  }
+
+  function renderConversations() {
+    var empty = document.getElementById('convoEmpty');
+    var container = document.getElementById('convoListItems');
+    container.innerHTML = '';
+    if (!conversations.length) {
+      empty.style.display = 'flex';
+    } else {
+      empty.style.display = 'none';
+      conversations.forEach(function (convo) {
+        var row = document.createElement('div');
+        row.className = 'convo-row';
+
+        if (convoSelectMode) {
+          var circle = document.createElement('div');
+          circle.className = 'convo-select-circle' + (selectedConvoIds.indexOf(convo.id) > -1 ? ' checked' : '');
+          circle.innerHTML = '<svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M1 4.5L4 7.5L11 1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          row.appendChild(circle);
+          row.onclick = function () { toggleConvoSelection(convo.id); };
+        } else {
+          row.onclick = function () { openChat(convo.id); };
+        }
+
+        var avatar = document.createElement('div');
+        avatar.className = 'avatar convo-avatar-lg';
+        avatar.textContent = convo.name.charAt(0).toUpperCase();
+
+        var info = document.createElement('div');
+        info.className = 'convo-info';
+
+        var top = document.createElement('div');
+        top.className = 'convo-top';
+        var nameEl = document.createElement('span');
+        nameEl.className = 'convo-name';
+        nameEl.textContent = convo.name;
+        var timeEl = document.createElement('span');
+        timeEl.className = 'convo-time';
+        timeEl.textContent = formatConvoListTime(convo);
+        top.appendChild(nameEl);
+        top.appendChild(timeEl);
+
+        var preview = document.createElement('div');
+        preview.className = 'convo-preview';
+        preview.textContent = convo.lastPreview || 'Tap to write what you never said.';
+
+        info.appendChild(top);
+        info.appendChild(preview);
+
+        row.appendChild(avatar);
+        row.appendChild(info);
+
+        if (!convoSelectMode) {
+          var chevron = document.createElement('span');
+          chevron.className = 'convo-chevron';
+          chevron.setAttribute('aria-hidden', 'true');
+          chevron.innerHTML = '&#8250;';
+          row.appendChild(chevron);
+        }
+
+        container.appendChild(row);
+      });
+    }
+    updateConvoSelectionBar();
+  }
+
+  function toggleConvoSelectMode() {
+    if (convoSelectMode) {
+      exitConvoSelectMode();
+    } else {
+      enterConvoSelectMode();
+    }
+  }
+
+  function enterConvoSelectMode() {
+    if (!conversations.length) return;
+    convoSelectMode = true;
+    selectedConvoIds = [];
+    document.getElementById('inboxLeftSlot').textContent = 'Select All';
+    document.getElementById('inboxLeftSlot').onclick = toggleSelectAllConvos;
+    document.getElementById('inboxRightSlot').innerHTML = 'Cancel';
+    document.getElementById('inboxRightSlot').onclick = toggleConvoSelectMode;
+    document.getElementById('inboxFooter').style.display = 'none';
+    document.getElementById('convoSelectionBar').classList.add('active');
+    renderConversations();
+  }
+
+  function exitConvoSelectMode() {
+    convoSelectMode = false;
+    selectedConvoIds = [];
+    document.getElementById('inboxLeftSlot').textContent = 'Home';
+    document.getElementById('inboxLeftSlot').onclick = function () { showScreen('home'); };
+    document.getElementById('inboxRightSlot').innerHTML = '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M0 1h15M2.5 6h10M5.5 11h4" stroke="#d9dbe0" stroke-width="1.4" stroke-linecap="round"/></svg>';
+    document.getElementById('inboxRightSlot').onclick = toggleConvoSelectMode;
+    document.getElementById('inboxFooter').style.display = 'flex';
+    document.getElementById('convoSelectionBar').classList.remove('active');
+    renderConversations();
+  }
+
+  function toggleConvoSelection(id) {
+    var idx = selectedConvoIds.indexOf(id);
+    if (idx > -1) {
+      selectedConvoIds.splice(idx, 1);
+    } else {
+      selectedConvoIds.push(id);
+    }
+    renderConversations();
+  }
+
+  function toggleSelectAllConvos() {
+    if (selectedConvoIds.length === conversations.length) {
+      selectedConvoIds = [];
+    } else {
+      selectedConvoIds = conversations.map(function (c) { return c.id; });
+    }
+    renderConversations();
+  }
+
+  function updateConvoSelectionBar() {
+    var label = document.getElementById('convoSelectionLabel');
+    var delBtn = document.getElementById('convoDeleteBtn');
+    if (!label || !delBtn) return;
+    var count = selectedConvoIds.length;
+    if (!convoSelectMode) {
+      label.textContent = 'Select conversations to delete';
+      delBtn.classList.add('disabled');
+      return;
+    }
+    if (count > 0) {
+      label.textContent = count + (count === 1 ? ' conversation selected' : ' conversations selected');
+      delBtn.classList.remove('disabled');
+    } else {
+      label.textContent = 'Select conversations to delete';
+      delBtn.classList.add('disabled');
+    }
+  }
+
+  function deleteSelectedConversations() {
+    if (!selectedConvoIds.length) return;
+    document.getElementById('deleteConfirmOverlay').classList.add('active');
+  }
+
+  function confirmDeleteConvos() {
+    selectedConvoIds.forEach(function (id) {
+      storageDeleteSafe(STORAGE_MSGS_PREFIX + id);
+      storageDeleteSafe(STORAGE_DRAFT_PREFIX + id);
+      delete msgsDirtyIds[id];
+    });
+    conversations = conversations.filter(function (c) { return selectedConvoIds.indexOf(c.id) === -1; });
+    if (currentChatId !== null && selectedConvoIds.indexOf(currentChatId) > -1) currentChatId = null;
+    selectedConvoIds = [];
+    markIndexDirty();
+    flushDirty();
+    document.getElementById('deleteConfirmOverlay').classList.remove('active');
+    exitConvoSelectMode();
+  }
+
+  function cancelDeleteConvos() {
+    selectedConvoIds = [];
+    document.getElementById('deleteConfirmOverlay').classList.remove('active');
+    exitConvoSelectMode();
+  }
+
+  function pickName(name) {
+    document.getElementById('nameInput').value = name;
+  }
+
+  function confirmName() {
+    var value = document.getElementById('nameInput').value.trim();
+    if (!value) return;
+    var convo = {
+      id: nextConvoId++,
+      name: value,
+      messages: [],
+      lastPreview: 'Tap to write what you never said.',
+      lastTime: ''
+    };
+    conversations.push(convo);
+    markIndexDirty();
+    markMsgsDirty(convo.id);
+    flushDirty();
+    openChat(convo.id);
+  }
+
+  function getConvo(id) {
+    for (var i = 0; i < conversations.length; i++) {
+      if (conversations[i].id === id) return conversations[i];
+    }
+    return null;
+  }
+
+  function openChat(id) {
+    var convo = getConvo(id);
+    if (!convo) return;
+    flushDraftNow();
+    currentChatId = id;
+    document.getElementById('chatContactName').textContent = convo.name;
+    document.getElementById('chatAvatar').textContent = convo.name.charAt(0).toUpperCase();
+    var list = document.getElementById('messagesList');
+    list.innerHTML = '';
+    var lastDividerDate = null;
+    convo.messages.forEach(function (msg) {
+      var msgDate = msg.time ? new Date(msg.time) : new Date();
+      if (!lastDividerDate || !isSameDay(lastDividerDate, msgDate)) {
+        appendDateDivider(formatDayLabel(msgDate));
+        lastDividerDate = msgDate;
+      }
+      appendBubble(msg, false);
+    });
+    if (!convo.messages.length) {
+      appendDateDivider('Today');
+    }
+    var input = document.getElementById('messageInput');
+    input.value = '';
+    input.style.height = 'auto';
+    exitSelectMode();
+    showScreen('chat');
+    list.scrollTop = list.scrollHeight;
+    updateScrollThumb();
+    loadDraftForChat(id);
+  }
+
+  function appendBubble(msg, animate) {
+    var list = document.getElementById('messagesList');
+    var row = document.createElement('div');
+    row.className = 'bubble-row ' + msg.sender;
+    if (!animate) {
+      row.style.animation = 'none';
+      row.style.opacity = '1';
+    }
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble ' + msg.sender;
+    bubble.textContent = msg.text;
+    row.appendChild(bubble);
+    row._msgRef = msg;
+    row.onclick = function () { handleMessageClick(row); };
+    list.appendChild(row);
+    updateScrollThumb();
+    return row;
+  }
+
+  function openEraseConfirm() {
+    document.getElementById('eraseConfirmOverlay').classList.add('active');
+  }
+
+  function confirmEraseAll() {
+    conversations.forEach(function (c) {
+      storageDeleteSafe(STORAGE_MSGS_PREFIX + c.id);
+      storageDeleteSafe(STORAGE_DRAFT_PREFIX + c.id);
+    });
+    msgsDirtyIds = {};
+    conversations = [];
+    currentChatId = null;
+    markIndexDirty();
+    flushDirty();
+    exitSelectMode();
+    document.getElementById('messagesList').innerHTML = '<div class="date-divider">Today</div>';
+    document.getElementById('eraseConfirmOverlay').classList.remove('active');
+    showScreen('home');
+  }
+
+  function cancelEraseAll() {
+    document.getElementById('eraseConfirmOverlay').classList.remove('active');
+    showScreen('settings');
+  }
+
+  function autoGrowInput() {
+    var input = document.getElementById('messageInput');
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 108) + 'px';
+    if (currentChatId !== null) draftDirty = true;
+  }
+
+  function handleInputKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function sendMessage() {
+    if (currentChatId === null) return;
+    var convo = getConvo(currentChatId);
+    if (!convo) return;
+    var input = document.getElementById('messageInput');
+    var text = input.value.trim();
+    if (!text) return;
+    var sentAt = Date.now();
+    var msg = { text: text, sender: 'you', time: sentAt };
+    convo.messages.push(msg);
+    ensureDateDividerForNow();
+    appendBubble(msg, true);
+    input.value = '';
+    input.style.height = 'auto';
+    var list = document.getElementById('messagesList');
+    list.scrollTop = list.scrollHeight;
+    updateScrollThumb();
+    convo.lastPreview = text;
+    convo.lastTimestamp = sentAt;
+    convo.lastTime = formatClockTime(new Date(sentAt));
+    markMsgsDirty(convo.id);
+    markIndexDirty();
+    draftDirty = false;
+    storageDeleteSafe(STORAGE_DRAFT_PREFIX + convo.id);
+    flushDirty();
+  }
+
+  var selectMode = false;
+  var selectedRows = [];
+
+  function enterSelectMode() {
+    selectMode = true;
+    selectedRows = [];
+    document.getElementById('messagesList').classList.add('select-mode');
+    document.getElementById('selectionBar').classList.add('active');
+    updateSelectionBar();
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    selectedRows.forEach(function (row) { row.classList.remove('selected'); });
+    selectedRows = [];
+    document.getElementById('messagesList').classList.remove('select-mode');
+    document.getElementById('selectionBar').classList.remove('active');
+  }
+
+  function handleMessageClick(rowEl) {
+    if (!selectMode) return;
+    var idx = selectedRows.indexOf(rowEl);
+    if (idx > -1) {
+      rowEl.classList.remove('selected');
+      selectedRows.splice(idx, 1);
+    } else {
+      rowEl.classList.add('selected');
+      selectedRows.push(rowEl);
+    }
+    updateSelectionBar();
+  }
+
+  function updateSelectionBar() {
+    var label = document.getElementById('selectionLabel');
+    var delBtn = document.getElementById('deleteMsgBtn');
+    var count = selectedRows.length;
+    if (count > 0) {
+      label.textContent = count + (count === 1 ? ' message selected' : ' messages selected');
+      delBtn.disabled = false;
+    } else {
+      label.textContent = 'Tap messages to select them';
+      delBtn.disabled = true;
+    }
+  }
+
+  function deleteSelectedMessage() {
+    if (!selectedRows.length) return;
+    var convo = currentChatId !== null ? getConvo(currentChatId) : null;
+    selectedRows.forEach(function (row) {
+      if (convo && row._msgRef) {
+        var idx = convo.messages.indexOf(row._msgRef);
+        if (idx > -1) convo.messages.splice(idx, 1);
+      }
+      row.remove();
+    });
+    selectedRows = [];
+    updateSelectionBar();
+    updateScrollThumb();
+    if (convo) {
+      if (convo.messages.length) {
+        var lastMsg = convo.messages[convo.messages.length - 1];
+        convo.lastPreview = lastMsg.text;
+        convo.lastTimestamp = lastMsg.time || convo.lastTimestamp;
+      } else {
+        convo.lastPreview = 'Tap to write what you never said.';
+        convo.lastTimestamp = null;
+      }
+      markMsgsDirty(convo.id);
+      markIndexDirty();
+      flushDirty();
+    }
+  }
+
+  // All of these read from the visitor's own device clock (new Date()),
+  // which JS always reports in that device's local time zone — so every
+  // user automatically sees their own real, correct local time, with no
+  // hardcoded offset or server sync needed.
+  var DIVIDER_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var DIVIDER_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function formatClockTime(date) {
+    var h24 = date.getHours();
+    var h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    var mins = date.getMinutes();
+    var minsStr = mins < 10 ? '0' + mins : String(mins);
+    var ampm = h24 < 12 ? 'AM' : 'PM';
+    return h12 + ':' + minsStr + ' ' + ampm;
+  }
+
+  function isSameDay(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function daysBetween(a, b) {
+    var startA = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+    var startB = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+    return Math.round((startA - startB) / 86400000);
+  }
+
+  // Real calendar label for a message's day — Today / Yesterday / weekday /
+  // full date — computed against "right now" each time it's rendered, so a
+  // conversation reopened after any amount of time shows the true date.
+  function formatDayLabel(date) {
+    var now = new Date();
+    var diff = daysBetween(now, date);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff > 1 && diff < 7) return DIVIDER_WEEKDAYS[date.getDay()];
+    var label = DIVIDER_WEEKDAYS[date.getDay()] + ', ' + date.getDate() + ' ' + DIVIDER_MONTHS[date.getMonth()];
+    if (date.getFullYear() !== now.getFullYear()) label += ' ' + date.getFullYear();
+    return label;
+  }
+
+  // Conversation-list time label, iMessage-style: clock time for today,
+  // "Yesterday", a weekday within the last week, or a short date further back.
+  function formatConvoListTime(convo) {
+    if (!convo.lastTimestamp) return convo.lastTime || '';
+    var d = new Date(convo.lastTimestamp);
+    var now = new Date();
+    var diff = daysBetween(now, d);
+    if (diff === 0) return formatClockTime(d);
+    if (diff === 1) return 'Yesterday';
+    if (diff > 1 && diff < 7) return DIVIDER_WEEKDAYS[d.getDay()];
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
+  }
+
+  function appendDateDivider(label) {
+    var list = document.getElementById('messagesList');
+    var div = document.createElement('div');
+    div.className = 'date-divider';
+    div.textContent = label;
+    list.appendChild(div);
+    return div;
+  }
+
+  // Called right before a live send, in case the tab has been open across
+  // midnight — makes sure the divider above the new bubble still matches
+  // the real current day.
+  function ensureDateDividerForNow() {
+    var label = formatDayLabel(new Date());
+    var list = document.getElementById('messagesList');
+    var dividers = list.getElementsByClassName('date-divider');
+    var last = dividers.length ? dividers[dividers.length - 1] : null;
+    if (!last || last.textContent !== label) {
+      appendDateDivider(label);
+    }
+  }
+
+  function updateClock() {
+    var now = new Date();
+    var h24 = now.getHours();
+    var h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    var mins = now.getMinutes();
+    var minsStr = mins < 10 ? '0' + mins : String(mins);
+    var ampm = h24 < 12 ? 'AM' : 'PM';
+    var timeStr = h12 + ':' + minsStr;
+
+    currentTimeLabel = timeStr + ' ' + ampm;
+    document.getElementById('statusTime').textContent = timeStr;
+    document.getElementById('homeTime').textContent = timeStr;
+    document.getElementById('lockTime').textContent = timeStr;
+
+    var weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    var dateStr = weekdays[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()];
+    document.getElementById('homeDate').textContent = dateStr;
+
+    var lockDateStr = weekdays[now.getDay()].slice(0, 3) + ' ' + months[now.getMonth()].slice(0, 3) + ' ' + now.getDate();
+    document.getElementById('lockDate').textContent = lockDateStr;
+  }
+
+  function unlockPhone() {
+    var stack = document.getElementById('lockHomeStack');
+    var lock = document.getElementById('lockView');
+    var home = document.getElementById('homeView');
+    if (!lock || lock.classList.contains('unlocking')) return;
+
+    // Reveal the home screen underneath the lock screen and crossfade
+    // between them — same wallpaper carries through both, so it reads as
+    // one continuous unlock instead of a hard cut, the way iOS does it.
+    if (stack) stack.style.display = 'flex';
+    home.style.display = 'flex';
+    home.style.transition = 'none';
+    home.classList.add('revealing');
+    void home.offsetWidth; // force reflow so the "revealing" start state takes before animating
+    home.style.transition = '';
+
+    lock.classList.add('unlocking');
+    requestAnimationFrame(function () {
+      home.classList.remove('revealing');
+    });
+
+    setTimeout(function () {
+      lock.classList.remove('unlocking');
+      lock.style.display = 'none';
+      showScreen('home');
+    }, 280);
+  }
+
+  function lockPhone() {
+    var stack = document.getElementById('lockHomeStack');
+    var lock = document.getElementById('lockView');
+    var home = document.getElementById('homeView');
+    if (lock) {
+      lock.classList.remove('unlocking');
+      lock.style.display = 'flex';
+    }
+    if (home) {
+      home.classList.remove('revealing');
+      home.style.display = 'none';
+    }
+    if (stack) stack.style.display = 'flex';
+    showScreen('lock');
+  }
+
+  var messagesListEl = document.getElementById('messagesList');
+  messagesListEl.addEventListener('wheel', function (e) {
+    this.scrollTop += e.deltaY;
+    e.preventDefault();
+    updateScrollThumb();
+  }, { passive: false });
+  messagesListEl.addEventListener('scroll', function () {
+    updateScrollThumb();
+  });
+
+  function updateScrollThumb() {
+    var list = document.getElementById('messagesList');
+    var track = document.getElementById('customScrollbar');
+    var thumb = document.getElementById('scrollThumb');
+    if (!list || !track || !thumb) return;
+    var trackHeight = track.clientHeight;
+    var contentHeight = list.scrollHeight;
+    var visibleHeight = list.clientHeight;
+    if (contentHeight <= visibleHeight + 1 || trackHeight <= 0) {
+      track.style.display = 'none';
+      return;
+    }
+    track.style.display = 'block';
+    var thumbHeight = Math.max(26, (visibleHeight / contentHeight) * trackHeight);
+    var maxThumbTop = trackHeight - thumbHeight;
+    var scrollableDist = contentHeight - visibleHeight;
+    var scrollRatio = scrollableDist > 0 ? list.scrollTop / scrollableDist : 0;
+    var thumbTop = scrollRatio * maxThumbTop;
+    thumb.style.height = thumbHeight + 'px';
+    thumb.style.top = thumbTop + 'px';
+  }
+
+  var thumbDragging = false;
+  var thumbDragStartY = 0;
+  var thumbDragStartScrollTop = 0;
+
+  function startThumbDrag(clientY) {
+    thumbDragging = true;
+    thumbDragStartY = clientY;
+    thumbDragStartScrollTop = document.getElementById('messagesList').scrollTop;
+    document.getElementById('scrollThumb').classList.add('dragging');
+  }
+
+  function moveThumbDrag(clientY) {
+    if (!thumbDragging) return;
+    var list = document.getElementById('messagesList');
+    var track = document.getElementById('customScrollbar');
+    var thumb = document.getElementById('scrollThumb');
+    var trackHeight = track.clientHeight;
+    var thumbHeight = thumb.clientHeight;
+    var maxThumbTop = trackHeight - thumbHeight;
+    var contentHeight = list.scrollHeight;
+    var visibleHeight = list.clientHeight;
+    var scrollableDist = contentHeight - visibleHeight;
+    if (maxThumbTop <= 0 || scrollableDist <= 0) return;
+    var deltaY = clientY - thumbDragStartY;
+    var scrollDelta = (deltaY / maxThumbTop) * scrollableDist;
+    list.scrollTop = thumbDragStartScrollTop + scrollDelta;
+    updateScrollThumb();
+  }
+
+  function endThumbDrag() {
+    if (!thumbDragging) return;
+    thumbDragging = false;
+    var thumb = document.getElementById('scrollThumb');
+    if (thumb) thumb.classList.remove('dragging');
+  }
+
+  var scrollThumbEl = document.getElementById('scrollThumb');
+  scrollThumbEl.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    startThumbDrag(e.clientY);
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (thumbDragging) moveThumbDrag(e.clientY);
+  });
+  document.addEventListener('mouseup', function () {
+    endThumbDrag();
+  });
+  scrollThumbEl.addEventListener('touchstart', function (e) {
+    startThumbDrag(e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (thumbDragging) {
+      moveThumbDrag(e.touches[0].clientY);
+      e.preventDefault();
+    }
+  }, { passive: false });
+  document.addEventListener('touchend', function () {
+    endThumbDrag();
+  });
+
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Load everything that was saved from a previous visit — conversations,
+  // their full message history, and any unsent draft — before the user
+  // starts interacting. Even if they come back six months later, this
+  // rebuilds exactly what they left.
+  loadState().then(function () {
+    renderConversations();
+  }).catch(function (e) {
+    console.error('Load failed', e);
+  });
+
+  // Room background: starts on the default room look immediately, then
+  // swaps in whatever was saved (including a custom photo) once storage
+  // responds — mirrors how the phone wallpaper loads below.
+  applyRoomBackground(currentRoomBgId, true);
+  loadRoomBgState().then(function () {
+    applyRoomBackground(currentRoomBgId, true);
+  }).catch(function (e) {
+    console.error('Room background load failed', e);
+  });
+
+  // Wallpaper starts on the default background immediately so the lock
+  // screen never flashes unstyled, then swaps to whatever was saved
+  // (including any custom photo) once storage responds.
+  applyWallpaper(currentWallpaperId, true);
+  loadWallpaperState().then(function () {
+    applyWallpaper(currentWallpaperId, true);
+  }).catch(function (e) {
+    console.error('Wallpaper load failed', e);
+  });
+
+  showScreen('lock');
+  runBootIntro();
+
+  // Autosave loop: every 3 seconds, flush any pending index/message/draft
+  // changes to the DataStore. Typing a draft, sending a message, or
+  // starting/deleting a conversation all mark something "dirty"; this
+  // timer is the safety net that guarantees it gets written even if the
+  // player never taps another button.
+  setInterval(flushDirty, 3000);
+
+  // Also flush immediately if the tab is hidden or about to close, so a
+  // draft mid-sentence is never lost to a closed tab or a dead battery.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') flushDirty();
+  });
+  window.addEventListener('pagehide', flushDirty);
+  window.addEventListener('beforeunload', flushDirty);
+</script>
+</body>
+</html>
